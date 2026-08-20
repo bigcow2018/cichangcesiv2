@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>磁场监测</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0b1220;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, "PingFang SC", sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 14px 14px 24px;
+    }
+    h1 {
+      font-size: 18px;
+      text-align: center;
+      color: #67e8f9;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    #status {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #1e293b;
+      margin-bottom: 10px;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+    #status.ok { background: #0f3d36; color: #6ee7b7; }
+    #status.run { background: #1e3a5f; color: #7dd3fc; }
+    #status.hot { background: #4a1520; color: #fda4af; }
+    #status.bad { background: #3f1d1d; color: #fecaca; }
+
+    #diag {
+      font-size: 11px;
+      color: #94a3b8;
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .nums {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .card .lab { font-size: 11px; color: #94a3b8; margin-bottom: 6px; }
+    .card .val {
+      font-size: 28px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #f8fafc;
+      line-height: 1.1;
+    }
+    .card .unit { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .card.hot { border-color: #ef4444; box-shadow: 0 0 16px rgba(239,68,68,.25); }
+    .card.hot .val { color: #f87171; }
+
+    .xyz {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .xyz .card { padding: 12px 6px; }
+    .xyz .card .val { font-size: 17px; }
+
+    #chartWrap {
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      position: relative;
+    }
+    #chart {
+      display: block;
+      width: 100%;
+      height: 240px;
+    }
+    .chart-lab {
+      position: absolute;
+      left: 10px; top: 8px;
+      font-size: 11px;
+      color: #64748b;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .bar-wrap {
+      margin-bottom: 14px;
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 10px 12px;
+      border: 1px solid #334155;
+    }
+    .bar-wrap .lab {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    #levelTrack {
+      height: 12px;
+      background: #0f172a;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #levelFill {
+      height: 100%;
+      width: 0%;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+      transition: width .08s linear;
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      background: #06b6d4;
+      color: #fff;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button:active { transform: scale(.97); }
+    #btnZero { background: #8b5cf6; }
+    #btnStop { background: #64748b; }
+    #btnHelp { background: #475569; font-size: 12px; }
+
+    .help {
+      display: none;
+      font-size: 12px;
+      color: #cbd5e1;
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 10px 12px;
+      line-height: 1.55;
+    }
+    .help.show { display: block; }
+  </style>
+</head>
+<body>
+  <h1>磁场监测</h1>
+  <div id="status">点「开始监测」</div>
+  <div id="diag">环境检测中…</div>
+
+  <div class="nums">
+    <div class="card" id="cardTotal">
+      <div class="lab">合成磁场 |B|</div>
+      <div class="val"><span id="bTotal">—</span></div>
+      <div class="unit">μT</div>
+    </div>
+    <div class="card" id="cardDelta">
+      <div class="lab">相对零点 Δ|B|</div>
+      <div class="val"><span id="bDelta">—</span></div>
+      <div class="unit">μT</div>
+    </div>
+  </div>
+
+  <div class="xyz">
+    <div class="card">
+      <div class="lab">Bx</div>
+      <div class="val"><span id="bx">—</span></div>
+      <div class="unit">μT</div>
+    </div>
+    <div class="card">
+      <div class="lab">By</div>
+      <div class="val"><span id="by">—</span></div>
+      <div class="unit">μT</div>
+    </div>
+    <div class="card">
+      <div class="lab">Bz</div>
+      <div class="val"><span id="bz">—</span></div>
+      <div class="unit">μT</div>
+    </div>
+  </div>
+
+  <div class="bar-wrap">
+    <div class="lab"><span>磁场变化强度</span><span id="levelTxt">0%</span></div>
+    <div id="levelTrack"><div id="levelFill"></div></div>
+  </div>
+
+  <div id="chartWrap">
+    <canvas id="chart" width="360" height="240"></canvas>
+    <div class="chart-lab">Δ|B| 动态曲线（μT）</div>
+  </div>
+
+  <div class="btns">
+    <button id="btnStart">开始监测</button>
+    <button id="btnZero">设为零点</button>
+    <button id="btnStop">停止</button>
+    <button id="btnHelp">排查说明</button>
+  </div>
+  <div class="help" id="help">
+    <strong>出现「不支持磁力计」时：</strong><br>
+    1. 必须用 <b>Google Chrome</b>（应用商店搜 Chrome，开发者 Google LLC）<br>
+    2. 必须用 <b>https://</b> 打开（GitHub Pages），不能是文件或 http<br>
+    3. 不要用微信 / QQ / 系统浏览器 / 小米浏览器打开<br>
+    4. Chrome 地址栏输入 <code>chrome://flags</code>，搜索 Generic Sensor，若有则启用相关项后重启<br>
+    5. 部分国产定制 Chrome 删掉了磁力计 API，可换另一台安卓或原版 Chrome 试<br>
+    6. iPhone 网页通常无法读 μT
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const diagEl = document.getElementById('diag');
+    const bTotalEl = document.getElementById('bTotal');
+    const bDeltaEl = document.getElementById('bDelta');
+    const bxEl = document.getElementById('bx');
+    const byEl = document.getElementById('by');
+    const bzEl = document.getElementById('bz');
+    const cardTotal = document.getElementById('cardTotal');
+    const cardDelta = document.getElementById('cardDelta');
+    const levelFill = document.getElementById('levelFill');
+    const levelTxt = document.getElementById('levelTxt');
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+    const helpEl = document.getElementById('help');
+
+    let running = false;
+    let zeroB = null;
+    let history = [];
+    const MAX_POINTS = 150;
+    let lastB = 0, lastDelta = 0;
+    let gotSample = false;
+    let magSensor = null;
+    let pulse = 0;
+
+    function setStatus(t, cls) {
+      statusEl.textContent = t;
+      statusEl.className = cls || '';
+    }
+
+    function uaInfo() {
+      const ua = navigator.userAgent || '';
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost';
+      const hasMag = typeof Magnetometer !== 'undefined';
+      const hasAbs = typeof AbsoluteOrientationSensor !== 'undefined';
+      const isAndroid = /Android/i.test(ua);
+      const isChrome = /Chrome/i.test(ua) && !/Edg/i.test(ua) && !/OPR/i.test(ua);
+      const isWeChat = /MicroMessenger/i.test(ua);
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+      return { ua, isHttps, hasMag, hasAbs, isAndroid, isChrome, isWeChat, isIOS };
+    }
+
+    function refreshDiag() {
+      const i = uaInfo();
+      diagEl.innerHTML =
+        'HTTPS: <b>' + (i.isHttps ? '是' : '否') + '</b> · ' +
+        'Magnetometer API: <b>' + (i.hasMag ? '有' : '无') + '</b><br>' +
+        '系统: ' + (i.isIOS ? 'iOS' : (i.isAndroid ? 'Android' : '其他')) +
+        ' · 浏览器像 Chrome: ' + (i.isChrome ? '是' : '否') +
+        (i.isWeChat ? ' · <b>微信内置</b>' : '') + '<br>' +
+        '<span style="opacity:.7">' + (navigator.userAgent || '').slice(0, 90) + '…</span>';
+    }
+
+    function resize() {
+      const w = Math.min(400, canvas.parentElement.clientWidth || 360);
+      canvas.width = w;
+      canvas.height = 240;
+    }
+    window.addEventListener('resize', resize);
+
+    function drawChart() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 6; i++) {
+        const y = (h / 6) * i;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#334155';
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (history.length < 2) {
+        pulse += 0.04;
+        const y = h / 2 + Math.sin(pulse) * 3;
+        ctx.strokeStyle = 'rgba(239,68,68,0.25)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        return;
+      }
+
+      let maxAbs = 2;
+      for (const p of history) maxAbs = Math.max(maxAbs, Math.abs(p.d));
+      maxAbs *= 1.2;
+
+      ctx.beginPath();
+      history.forEach((p, i) => {
+        const x = (i / Math.max(1, MAX_POINTS - 1)) * (w - 2) + 1;
+        const y = h / 2 - (p.d / maxAbs) * (h * 0.42);
+        if (i === 0) ctx.moveTo(x, h / 2);
+        ctx.lineTo(x, y);
+      });
+      const lastX = ((history.length - 1) / Math.max(1, MAX_POINTS - 1)) * (w - 2) + 1;
+      ctx.lineTo(lastX, h / 2);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(239,68,68,0.35)');
+      grad.addColorStop(0.5, 'rgba(239,68,68,0.08)');
+      grad.addColorStop(1, 'rgba(239,68,68,0.35)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.beginPath();
+      history.forEach((p, i) => {
+        const x = (i / Math.max(1, MAX_POINTS - 1)) * (w - 2) + 1;
+        const y = h / 2 - (p.d / maxAbs) * (h * 0.42);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(248,113,113,0.35)';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      const pLast = history[history.length - 1];
+      const lx = ((history.length - 1) / Math.max(1, MAX_POINTS - 1)) * (w - 2) + 1;
+      const ly = h / 2 - (pLast.d / maxAbs) * (h * 0.42);
+      pulse += 0.12;
+      const pr = 4 + Math.sin(pulse) * 2;
+      ctx.beginPath();
+      ctx.arc(lx, ly, pr + 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(239,68,68,0.25)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lx, ly, pr, 0, Math.PI * 2);
+      ctx.fillStyle = '#fca5a5';
+      ctx.fill();
+    }
+
+    function animLoop() {
+      drawChart();
+      requestAnimationFrame(animLoop);
+    }
+
+    function onField(bx, by, bz) {
+      gotSample = true;
+      lastB = Math.sqrt(bx * bx + by * by + bz * bz);
+      if (zeroB === null) zeroB = lastB;
+      lastDelta = lastB - zeroB;
+
+      bxEl.textContent = bx.toFixed(1);
+      byEl.textContent = by.toFixed(1);
+      bzEl.textContent = bz.toFixed(1);
+      bTotalEl.textContent = lastB.toFixed(1);
+      bDeltaEl.textContent = (lastDelta >= 0 ? '+' : '') + lastDelta.toFixed(1);
+
+      const absD = Math.abs(lastDelta);
+      const hot = absD > 8;
+      cardTotal.classList.toggle('hot', hot);
+      cardDelta.classList.toggle('hot', hot);
+
+      const pct = Math.min(100, (absD / 40) * 100);
+      levelFill.style.width = pct + '%';
+      levelTxt.textContent = pct.toFixed(0) + '%';
+
+      history.push({ t: performance.now(), d: lastDelta });
+      if (history.length > MAX_POINTS) history.shift();
+
+      if (running) {
+        setStatus(
+          hot ? ('磁场变化较大  |ΔB| = ' + absD.toFixed(1) + ' μT') : ('监测中  |B| ≈ ' + lastB.toFixed(0) + ' μT'),
+          hot ? 'hot' : 'run'
+        );
+      }
+    }
+
+    function tryMagnetometer() {
+      if (typeof Magnetometer === 'undefined') return false;
+      try {
+        magSensor = new Magnetometer({ frequency: 25 });
+        magSensor.addEventListener('reading', () => {
+          onField(magSensor.x || 0, magSensor.y || 0, magSensor.z || 0);
+        });
+        magSensor.addEventListener('error', (e) => {
+          setStatus('传感器错误：' + ((e.error && e.error.name) || 'Error'), 'bad');
+          stop();
+        });
+        magSensor.start();
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function start() {
+      if (running) return;
+      refreshDiag();
+      const info = uaInfo();
+
+      if (!info.isHttps) {
+        setStatus('请用 HTTPS（GitHub Pages）打开，当前不是安全链接', 'bad');
+        return;
+      }
+      if (info.isWeChat) {
+        setStatus('请在系统 Chrome 中打开，不要用微信', 'bad');
+        return;
+      }
+      if (info.isIOS) {
+        setStatus('iPhone 网页通常无法读取磁力计 μT', 'bad');
+        return;
+      }
+      if (typeof Magnetometer === 'undefined') {
+        setStatus('本浏览器无 Magnetometer API。请安装 Google 版 Chrome 用 https 打开', 'bad');
+        helpEl.classList.add('show');
+        return;
+      }
+
+      running = true;
+      gotSample = false;
+      history = [];
+      zeroB = null;
+      setStatus('正在连接磁力计…', 'run');
+
+      if (navigator.permissions && navigator.permissions.query) {
+        try { await navigator.permissions.query({ name: 'magnetometer' }); } catch (e) {}
+      }
+
+      if (!tryMagnetometer()) {
+        setStatus('磁力计启动失败', 'bad');
+        running = false;
+        return;
+      }
+
+      setStatus('监测中', 'run');
+      setTimeout(() => {
+        if (running && !gotSample) {
+          setStatus('API 有，但未收到数据（权限或机型限制）', 'bad');
+        }
+      }, 3000);
+    }
+
+    function stop() {
+      running = false;
+      if (magSensor) {
+        try { magSensor.stop(); } catch (e) {}
+        magSensor = null;
+      }
+      setStatus('已停止');
+    }
+
+    document.getElementById('btnStart').onclick = start;
+    document.getElementById('btnStop').onclick = stop;
+    document.getElementById('btnZero').onclick = () => {
+      if (!gotSample) { setStatus('尚无数据', 'bad'); return; }
+      zeroB = lastB;
+      history = [];
+      setStatus('已设零点', 'ok');
+    };
+    document.getElementById('btnHelp').onclick = () => {
+      helpEl.classList.toggle('show');
+    };
+
+    resize();
+    refreshDiag();
+    animLoop();
+  </script>
+</body>
+</html>
